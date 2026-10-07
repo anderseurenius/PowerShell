@@ -1,0 +1,320 @@
+# ==========================================
+# Systemkontroll - Installerade program
+# och Windows Services
+# ==========================================
+
+# Sökväg till Desktop
+$Desktop = [Environment]::GetFolderPath("Desktop")
+
+# Filnamn
+$OutputFile = Join-Path $Desktop "Systemkontroll.txt"
+
+# Starta/skriv över rapporten
+"=============================================" | Out-File $OutputFile
+" SYSTEMKONTROLL" | Out-File $OutputFile -Append
+" Datum: $(Get-Date)" | Out-File $OutputFile -Append
+" Dator: $env:COMPUTERNAME" | Out-File $OutputFile -Append
+" Användare: $env:USERNAME" | Out-File $OutputFile -Append
+"=============================================" | Out-File $OutputFile -Append
+
+
+# ==========================================
+# 1. PROGRAM FILES
+# ==========================================
+
+"`n`n=============================================" |
+    Out-File $OutputFile -Append
+
+" INSTALLERADE PROGRAM / PROGRAM FILES" |
+    Out-File $OutputFile -Append
+
+"=============================================" |
+    Out-File $OutputFile -Append
+
+
+# Program Files
+$ProgramFolders = @(
+    $env:ProgramFiles,
+    ${env:ProgramFiles(x86)}
+)
+
+foreach ($Folder in $ProgramFolders) {
+
+    if (Test-Path $Folder) {
+
+        "`n--- $Folder ---" |
+            Out-File $OutputFile -Append
+
+        Get-ChildItem -Path $Folder -Directory -ErrorAction SilentlyContinue |
+            Sort-Object Name |
+            ForEach-Object {
+                $_.Name |
+                    Out-File $OutputFile -Append
+            }
+    }
+}
+
+
+# ==========================================
+# 2. REGISTRERADE INSTALLERADE PROGRAM
+# ==========================================
+
+"`n`n=============================================" |
+    Out-File $OutputFile -Append
+
+" REGISTRERADE INSTALLERADE PROGRAM" |
+    Out-File $OutputFile -Append
+
+"=============================================" |
+    Out-File $OutputFile -Append
+
+
+$RegistryPaths = @(
+    "HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*"
+)
+
+foreach ($Path in $RegistryPaths) {
+
+    Get-ItemProperty $Path -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName } |
+        Select-Object DisplayName, DisplayVersion, Publisher |
+        Sort-Object DisplayName |
+        Format-Table -AutoSize |
+        Out-String |
+        Out-File $OutputFile -Append
+}
+
+
+# ==========================================
+# 3. WINDOWS SERVICES
+# ==========================================
+
+"`n`n=============================================" |
+    Out-File $OutputFile -Append
+
+" WINDOWS SERVICES - DETALJERAD INFORMATION" |
+    Out-File $OutputFile -Append
+
+"=============================================" |
+    Out-File $OutputFile -Append
+
+
+Get-CimInstance Win32_Service |
+    Select-Object `
+        Name,
+        DisplayName,
+        Description,
+        State,
+        StartMode,
+        StartName,
+        ServiceType,
+        ProcessId,
+        ExitCode,
+        PathName |
+    Sort-Object Name |
+    Format-List |
+    Out-String -Width 240 |
+    Out-File $OutputFile -Append
+
+# ==========================================
+# 4. WI-FI INFORMATION
+# ==========================================
+
+"`n`n=============================================" |
+    Out-File $OutputFile -Append
+
+" WI-FI INFORMATION" |
+    Out-File $OutputFile -Append
+
+"=============================================" |
+    Out-File $OutputFile -Append
+
+
+# ------------------------------------------
+# Wi-Fi adapter
+# ------------------------------------------
+
+"`n--- WI-FI ADAPTER ---" |
+    Out-File $OutputFile -Append
+
+Get-NetAdapter |
+    Where-Object {
+        $_.InterfaceDescription -match "Wi-Fi|Wireless|802.11"
+    } |
+    Select-Object Name,
+                  InterfaceDescription,
+                  Status,
+                  MacAddress,
+                  LinkSpeed |
+    Format-List |
+    Out-String |
+    Out-File $OutputFile -Append
+
+
+# ------------------------------------------
+# Anslutet Wi-Fi
+# ------------------------------------------
+
+"`n--- ANSLUTET WI-FI ---" |
+    Out-File $OutputFile -Append
+
+netsh wlan show interfaces |
+    Out-File $OutputFile -Append
+
+
+# ------------------------------------------
+# Wi-Fi profil
+# ------------------------------------------
+
+"`n--- WI-FI PROFIL ---" |
+    Out-File $OutputFile -Append
+
+netsh wlan show profile |
+    Out-File $OutputFile -Append
+
+
+# ------------------------------------------
+# Tillgängliga Wi-Fi nätverk
+# ------------------------------------------
+
+"`n--- TILLGÄNGLIGA WI-FI NÄTVERK ---" |
+    Out-File $OutputFile -Append
+
+netsh wlan show networks mode=bssid |
+    Out-File $OutputFile -Append
+
+
+
+# ==========================================
+# 5. NÄTVERKSKONFIGURATION
+# ==========================================
+
+"`n`n=============================================" |
+    Out-File $OutputFile -Append
+
+" NÄTVERKSKONFIGURATION" |
+    Out-File $OutputFile -Append
+
+"=============================================" |
+    Out-File $OutputFile -Append
+
+
+# ------------------------------------------
+# Nätverkskort
+# ------------------------------------------
+
+"`n--- NÄTVERKSKORT ---" |
+    Out-File $OutputFile -Append
+
+Get-NetAdapter |
+    Select-Object Name,
+                  InterfaceDescription,
+                  Status,
+                  MacAddress,
+                  LinkSpeed,
+                  ifIndex |
+    Format-Table -AutoSize |
+    Out-String -Width 240 |
+    Out-File $OutputFile -Append
+
+
+# ------------------------------------------
+# IP-adresser
+# ------------------------------------------
+
+"`n--- IP-ADRESSER ---" |
+    Out-File $OutputFile -Append
+
+Get-NetIPAddress |
+    Where-Object {
+        $_.IPAddress -notlike "127.*" -and
+        $_.IPAddress -ne "::1"
+    } |
+    Select-Object InterfaceAlias,
+                  AddressFamily,
+                  IPAddress,
+                  PrefixLength,
+                  PrefixOrigin,
+                  SuffixOrigin |
+    Sort-Object InterfaceAlias |
+    Format-Table -AutoSize |
+    Out-String -Width 240 |
+    Out-File $OutputFile -Append
+
+
+# ------------------------------------------
+# Default Gateway
+# ------------------------------------------
+
+"`n--- DEFAULT GATEWAY ---" |
+    Out-File $OutputFile -Append
+
+Get-NetIPConfiguration |
+    Where-Object {$_.IPv4DefaultGateway} |
+    Select-Object InterfaceAlias,
+                  IPv4DefaultGateway,
+                  IPv6DefaultGateway |
+    Format-List |
+    Out-String -Width 240 |
+    Out-File $OutputFile -Append
+
+
+# ------------------------------------------
+# DNS
+# ------------------------------------------
+
+"`n--- DNS-SERVRAR ---" |
+    Out-File $OutputFile -Append
+
+Get-DnsClientServerAddress |
+    Where-Object {$_.ServerAddresses} |
+    Select-Object InterfaceAlias,
+                  AddressFamily,
+                  ServerAddresses |
+    Format-List |
+    Out-String -Width 240 |
+    Out-File $OutputFile -Append
+
+
+# ------------------------------------------
+# DHCP
+# ------------------------------------------
+
+"`n--- DHCP ---" |
+    Out-File $OutputFile -Append
+
+Get-NetIPInterface |
+    Select-Object InterfaceAlias,
+                  AddressFamily,
+                  Dhcp,
+                  ConnectionState,
+                  InterfaceMetric |
+    Format-Table -AutoSize |
+    Out-String -Width 240 |
+    Out-File $OutputFile -Append
+
+
+# ==========================================
+# KLAR
+# ==========================================
+
+"`n`n=============================================" |
+    Out-File $OutputFile -Append
+
+" SYSTEMKONTROLL KLAR" |
+    Out-File $OutputFile -Append
+
+" Rapport skapad: $(Get-Date)" |
+    Out-File $OutputFile -Append
+
+" Rapport: $OutputFile" |
+    Out-File $OutputFile -Append
+
+"=============================================" |
+    Out-File $OutputFile -Append
+
+
+# Öppna rapporten
+Start-Process notepad.exe $OutputFile
